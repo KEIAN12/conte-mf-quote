@@ -15,7 +15,10 @@
         "name": "株式会社CONTE",
         "email": "yoshiguchi@conte-inc.com"
       },
-      "source": ".",
+      "source": {
+        "source": "github",
+        "repo": "KEIAN12/conte-mf-quote"
+      },
       "category": "finance",
       "keywords": [
         "moneyforward",
