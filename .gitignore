@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+._*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Secrets (念のため)
+.env
+*.secret
+credentials.json
+
+# Cowork / Claude Code 生成物
+.claude-local/
