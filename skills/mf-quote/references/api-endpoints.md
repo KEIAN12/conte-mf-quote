@@ -57,13 +57,13 @@
 | `detail` | string | 任意 | 補足説明（改行で複数行可） |
 | `note` | string | 任意 | 品目内メモ |
 
-### 例: 配信業務の見積（蒲郡市役所向け）
+### 例: 配信業務の見積（〇〇市役所向け）
 
 ```json
 {
   "department_id": "abc123",
   "quote_date": "2026-04-20",
-  "title": "まちづくり市民フォーラム 第3回 配信",
+  "title": "市民フォーラム 第3回 配信",
   "excise_type": "boolean",
   "items": [
     {

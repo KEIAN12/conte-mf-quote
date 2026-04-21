@@ -90,7 +90,7 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "取引先名の検索語（例: 蒲郡市役所）"},
+                "query": {"type": "string", "description": "取引先名の検索語（例: 〇〇市役所）"},
                 "per_page": {"type": "integer", "default": 25},
                 "page": {"type": "integer", "default": 1},
             },

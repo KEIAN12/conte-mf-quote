@@ -4,7 +4,7 @@
   "description": "株式会社CONTE 社内向け Cowork プラグイン集。MF見積書作成など、社員の業務を効率化するプラグインを配布します。",
   "owner": {
     "name": "株式会社CONTE",
-    "email": "yoshiguchi@conte-inc.com"
+    "email": "info@conte-inc.com"
   },
   "plugins": [
     {
@@ -13,7 +13,7 @@
       "version": "0.2.3",
       "author": {
         "name": "株式会社CONTE",
-        "email": "yoshiguchi@conte-inc.com"
+        "email": "info@conte-inc.com"
       },
       "source": {
         "source": "github",

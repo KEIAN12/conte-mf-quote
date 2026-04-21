@@ -178,7 +178,7 @@ def main():
     # Client Secret取得（環境変数 or 対話）
     client_secret = os.environ.get("MF_CLIENT_SECRET")
     if not client_secret:
-        print("代表（吉口さん）からもらったMF Client Secretを入力してください。")
+        print("代表からもらったMF Client Secretを入力してください。")
         print("（入力は画面に表示されません）")
         import getpass
         client_secret = getpass.getpass("Client Secret: ").strip()
