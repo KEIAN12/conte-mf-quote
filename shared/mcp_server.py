@@ -312,20 +312,44 @@ def _tool_mf_search_quotes(args: dict) -> dict:
     )
 
 
+# MF クラウド請求書の管理画面URL生成ヘルパー
+# 返り値に web_url を付加して、ユーザーに「MFで見る」リンクを提示できるようにする
+MF_WEB_BASE = "https://invoice.moneyforward.com"
+
+
+def _extract_quote_id(result: Any) -> Optional[str]:
+    """API レスポンスから quote_id を抽出。トップレベル or data 配下どちらにも対応。"""
+    if isinstance(result, dict):
+        if "id" in result:
+            return str(result["id"])
+        data = result.get("data")
+        if isinstance(data, dict) and "id" in data:
+            return str(data["id"])
+    return None
+
+
+def _attach_web_url(result: Any) -> Any:
+    """見積書レスポンスに MF 管理画面の URL を付加する"""
+    qid = _extract_quote_id(result)
+    if qid and isinstance(result, dict):
+        result["web_url"] = f"{MF_WEB_BASE}/quotes/{qid}"
+    return result
+
+
 def _tool_mf_get_quote(args: dict) -> dict:
-    return mf_client.get_quote(args["quote_id"])
+    return _attach_web_url(mf_client.get_quote(args["quote_id"]))
 
 
 def _tool_mf_duplicate_quote(args: dict) -> dict:
-    return mf_client.duplicate_quote(args["quote_id"])
+    return _attach_web_url(mf_client.duplicate_quote(args["quote_id"]))
 
 
 def _tool_mf_create_quote(args: dict) -> dict:
-    return mf_client.create_quote(args["payload"])
+    return _attach_web_url(mf_client.create_quote(args["payload"]))
 
 
 def _tool_mf_update_quote(args: dict) -> dict:
-    return mf_client.update_quote(args["quote_id"], args["payload"])
+    return _attach_web_url(mf_client.update_quote(args["quote_id"], args["payload"]))
 
 
 def _tool_mf_add_item(args: dict) -> dict:
@@ -412,7 +436,7 @@ def _handle_initialize(params: dict) -> dict:
         },
         "serverInfo": {
             "name": "conte-mf-quote",
-            "version": "0.2.3",
+            "version": "0.2.4",
         },
     }
 
