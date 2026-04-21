@@ -1,6 +1,6 @@
 {
   "name": "conte-mf-quote",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "MoneyForwardクラウド請求書の見積書を対話型で作成するプラグイン。宛先・件名・金額を聞いて、AIが項目を提案し、MF下書きとして保存します。",
   "author": {
     "name": "株式会社CONTE",

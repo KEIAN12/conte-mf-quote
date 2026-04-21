@@ -436,7 +436,7 @@ def _handle_initialize(params: dict) -> dict:
         },
         "serverInfo": {
             "name": "conte-mf-quote",
-            "version": "0.2.4",
+            "version": "0.2.5",
         },
     }
 
