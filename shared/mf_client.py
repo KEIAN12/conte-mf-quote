@@ -229,6 +229,25 @@ def download_quote_pdf(quote_id: str) -> bytes:
     return _request("GET", f"/quotes/{quote_id}.pdf")
 
 
+# ========== Billing 請求書（quote→billing変換のみ） ==========
+
+def convert_quote_to_billing(quote_id: str) -> dict:
+    """見積書を請求書に変換し、下書き状態の請求書を作成する。
+
+    MF Invoice API v3 の専用エンドポイント `POST /quotes/{id}/convert_to_billing` を使用。
+    リクエストボディは不要。MF側で見積の品目・宛先・金額を引き継いで請求書を新規生成する。
+    生成された請求書は payment_status="未設定" / posting_status="未郵送" の下書き相当で、
+    発行操作（PDF確定/送付/入金登録）は MF管理画面から人間が行う運用。
+
+    Returns:
+        生成されたBillingオブジェクト（id, billing_number, billing_date, due_date, items など）
+
+    Raises:
+        MFAPIError: 404 = 見積が見つからない／既に変換済み等。
+    """
+    return _request("POST", f"/quotes/{quote_id}/convert_to_billing")
+
+
 # ========== Partner 取引先 ==========
 
 def list_partners(query: Optional[str] = None, per_page: int = 25, page: int = 1) -> dict:

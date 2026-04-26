@@ -19,6 +19,7 @@
   - mf_add_item          : 品目追加
   - mf_delete_item       : 品目削除
   - mf_download_pdf      : 見積PDFをダウンロードしてファイル保存
+  - mf_convert_quote_to_invoice : 見積書を請求書に変換し、下書きとして保存
 
 すべて下書きまで。発行はMF管理画面から人間が行う運用。
 """
@@ -223,6 +224,26 @@ TOOLS = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "mf_convert_quote_to_invoice",
+        "description": (
+            "指定した見積書(quote_id)をMF Cloud請求書に変換し、下書き状態の請求書として保存する。"
+            "MF Invoice API v3の `POST /quotes/{quote_id}/convert_to_billing` を呼ぶ。"
+            "宛先・品目・金額は見積から自動引き継ぎ。発行（送付・入金登録）はMF管理画面で人間が行う運用。"
+            "戻り値: 生成された請求書のid・billing_number・MF管理画面URL(web_url)。"
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "quote_id": {
+                    "type": "string",
+                    "description": "変換元の見積書ID（mf_search_quotes / mf_get_quote で取得可）",
+                },
+            },
+            "required": ["quote_id"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 
@@ -361,6 +382,32 @@ def _tool_mf_delete_item(args: dict) -> dict:
     return {"status": "deleted"}
 
 
+def _extract_billing_id(result: Any) -> Optional[str]:
+    """Billing 作成APIレスポンスから billing_id を抽出。"""
+    if isinstance(result, dict):
+        if "id" in result:
+            return str(result["id"])
+        data = result.get("data")
+        if isinstance(data, dict) and "id" in data:
+            return str(data["id"])
+    return None
+
+
+def _attach_billing_web_url(result: Any) -> Any:
+    """請求書レスポンスに MF 管理画面の URL を付加する。"""
+    bid = _extract_billing_id(result)
+    if bid and isinstance(result, dict):
+        result["web_url"] = f"{MF_WEB_BASE}/billings/{bid}"
+    return result
+
+
+def _tool_mf_convert_quote_to_invoice(args: dict) -> dict:
+    """見積書を請求書に変換し、下書きとして保存する。"""
+    quote_id = args["quote_id"]
+    billing = mf_client.convert_quote_to_billing(quote_id)
+    return _attach_billing_web_url(billing)
+
+
 def _tool_mf_download_pdf(args: dict) -> dict:
     quote_id = args["quote_id"]
     save_path = args.get("save_path")
@@ -399,6 +446,7 @@ TOOL_HANDLERS = {
     "mf_add_item": _tool_mf_add_item,
     "mf_delete_item": _tool_mf_delete_item,
     "mf_download_pdf": _tool_mf_download_pdf,
+    "mf_convert_quote_to_invoice": _tool_mf_convert_quote_to_invoice,
 }
 
 
@@ -436,7 +484,7 @@ def _handle_initialize(params: dict) -> dict:
         },
         "serverInfo": {
             "name": "conte-mf-quote",
-            "version": "0.2.5",
+            "version": "0.3.0",
         },
     }
 

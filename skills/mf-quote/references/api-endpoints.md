@@ -146,6 +146,35 @@
 
 バイナリ返却。そのままファイルに保存する。
 
+## 見積→請求書 変換（POST /quotes/{quote_id}/convert_to_billing）
+
+承認済みの見積書を請求書（Billing）に変換する専用エンドポイント。
+
+- **リクエストボディ不要**。空POSTでOK。
+- 宛先・品目・金額・日付などは見積から自動引き継ぎ。
+- 戻り値は新しい請求書の Billing オブジェクト（`id`, `billing_number`, `billing_date`, `due_date`, `payment_status`, `posting_status`, `items` 等）。
+- 生成直後の請求書は `payment_status="未設定"`, `posting_status="未郵送"` の**下書き相当**。送付・入金登録などの確定操作はMF管理画面で人間が行う運用。
+- スコープ: `mfc/invoice/data.write`（既存と同じ）。
+
+MCP側ラッパー: `mf_convert_quote_to_invoice(quote_id)` を呼ぶ。戻り値に `web_url`（MF管理画面の請求書編集URL）が付加される。
+
+```
+POST /quotes/wVttNFMYyEM5RagsAK3pAA/convert_to_billing
+→ 201 Created
+{
+  "id": "xxx",
+  "billing_number": "INV-001",
+  "billing_date": "2026-04-26",
+  "due_date": "2026-05-31",
+  "payment_status": "未設定",
+  "posting_status": "未郵送",
+  "items": [...],
+  ...
+}
+```
+
+**注意**: 同じ見積から何度でも変換できる仕様か、1回限りかはMF未確認。重複請求事故防止のため、変換前に「この見積は前にも請求書化したか？」をユーザーに確認するのが安全。
+
 ## 金額配分ロジック（Claudeが使うときの参考）
 
 ユーザーが「税別18万」と言ったら税抜合計180,000を目標に項目配分する。
