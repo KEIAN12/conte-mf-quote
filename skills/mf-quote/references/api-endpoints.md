@@ -196,3 +196,21 @@ POST /quotes/wVttNFMYyEM5RagsAK3pAA/convert_to_billing
 - 過去のテスト実装で `tax_type` フィールドを試したが、MF APIは `excise_type` を使う
 - 品目の `quantity` は整数でも小数（3.5時間 等）でもOK
 - 発行前は `status: "draft"`、明示的に発行するまで下書きのまま
+
+## PUT /billings/{id} — 請求書の更新（v0.3.1〜）
+
+`mf_update_billing(billing_id, payload)`。**payloadはフラット**（`{"billing": {...}}` と包むと422）。
+
+| キー | 意味 |
+|---|---|
+| `billing_date` | 請求日 |
+| `sales_date` | 売上計上日（請求日と揃える。ずれると記帳月が変わる） |
+| `due_date` | 支払期限 |
+| `title` | 件名 |
+| `memo` | メモ（**案件コード `P2026xxxxx` を入れる運用**。CONTE OSの同期がここを読んで案件へ自動で紐づける） |
+| `note` | 備考 |
+
+**主な用途は変換直後の日付直し。** `convert_quote_to_billing` は見積の日付を引き継がず実行日を入れる。
+
+安全ガード `_assert_billing_editable` が次をブロックする（見積側の `_assert_editable` と同じ考え方）:
+`is_locked=true` / `email_status≠未送信` / `posting_status≠未郵送` / `payment_status=入金済み`

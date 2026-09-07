@@ -229,7 +229,97 @@ def download_quote_pdf(quote_id: str) -> bytes:
     return _request("GET", f"/quotes/{quote_id}.pdf")
 
 
-# ========== Billing 請求書（quote→billing変換のみ） ==========
+# ========== Billing 請求書（読み取り） ==========
+
+def list_billings(query: Optional[str] = None, per_page: int = 25, page: int = 1,
+                  range_key: Optional[str] = None,
+                  date_from: Optional[str] = None, date_to: Optional[str] = None) -> dict:
+    """請求書一覧を検索（読み取り専用）
+
+    /billings の `q` パラメータで検索。日付範囲は range_key + from/to で絞り込み。
+    range_key: billing_date | due_date | sales_date | created_at | updated_at
+    from/to: "yyyy-mm-dd" 形式
+    """
+    q: dict = {"per_page": per_page, "page": page}
+    if query:
+        q["q"] = query
+    if range_key:
+        q["range_key"] = range_key
+    if date_from:
+        q["from"] = date_from
+    if date_to:
+        q["to"] = date_to
+    return _request("GET", "/billings", query=q)
+
+
+def get_billing(billing_id: str) -> dict:
+    """請求書を1件取得（品目・入金ステータス含む全フィールド）"""
+    return _request("GET", f"/billings/{billing_id}")
+
+
+def _assert_billing_editable(billing_id: str) -> dict:
+    """請求書が編集可能（=未送信・未郵送・未入金・ロック解除）か確認する。
+
+    編集不可ならMFGuardErrorをraiseする。update_billing の先頭で呼ぶ。
+    見積側の _assert_editable と同じ考え方: **相手に届いた後の書類は書き換えない**。
+    届いた請求書を後から変えると、先方の控えとこちらの控えが食い違う。
+
+    Returns:
+        取得した請求書データ（呼び出し元で再利用できるよう）
+    """
+    billing = get_billing(billing_id)
+    data = billing.get("data", billing) if isinstance(billing, dict) else {}
+    if not isinstance(data, dict):
+        data = {}
+
+    number = data.get("billing_number", "?")
+
+    if data.get("is_locked") is True:
+        raise MFGuardError(
+            f"請求書No.{number} はロック済みのため編集できません。"
+            "MF画面でロックを解除してから再試行してください。"
+        )
+
+    email_status = data.get("email_status", "未送信")
+    if email_status and email_status != "未送信":
+        raise MFGuardError(
+            f"請求書No.{number} は送信済み（email_status={email_status}）のため編集できません。"
+            "相手に届いた書類を後から書き換えると、先方の控えと食い違います。"
+        )
+
+    posting = data.get("posting_status", "未郵送")
+    if posting and posting != "未郵送":
+        raise MFGuardError(
+            f"請求書No.{number} は郵送済み（posting_status={posting}）のため編集できません。"
+        )
+
+    payment = data.get("payment_status", "未設定")
+    if payment == "入金済み":
+        raise MFGuardError(
+            f"請求書No.{number} は入金済みのため編集できません。"
+            "金額や日付を変えると入金記録と合わなくなります。"
+        )
+
+    return data
+
+
+def update_billing(billing_id: str, payload: dict) -> dict:
+    """請求書のメタ情報を更新する。送信済み・郵送済み・入金済み・ロック済みはガードでブロック。
+
+    【なぜ要るか】(2026-09-07)
+    `convert_quote_to_billing` は見積の日付を引き継がず、**請求日と売上計上日に実行日を入れる**。
+    「8月の日付で」と頼まれた請求書が9月の日付で作られ、直す口が無かった。
+
+    payloadはMF Invoice API v3のBilling更新仕様に準拠した**フラットな辞書**
+    （`{"billing": {...}}` のように包むと422になる）。主に使うキー:
+      billing_date（請求日）/ sales_date（売上計上日）/ due_date（支払期限）
+      title（件名）/ memo（メモ。案件コードを入れる運用）/ note（備考）
+    """
+    _assert_billing_editable(billing_id)
+    return _request("PUT", f"/billings/{billing_id}", body=payload)
+
+
+# ========== Billing 請求書（quote→billing変換） ==========
 
 def convert_quote_to_billing(quote_id: str) -> dict:
     """見積書を請求書に変換し、下書き状態の請求書を作成する。
@@ -304,6 +394,9 @@ if __name__ == "__main__":
         elif cmd == "partners":
             q = sys.argv[2] if len(sys.argv) > 2 else None
             print(json.dumps(list_partners(q), indent=2, ensure_ascii=False))
+        elif cmd == "billings":
+            q = sys.argv[2] if len(sys.argv) > 2 else None
+            print(json.dumps(list_billings(q), indent=2, ensure_ascii=False))
         else:
             print(f"不明: {cmd}")
     except MFAPIError as e:

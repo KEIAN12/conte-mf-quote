@@ -20,8 +20,10 @@
   - mf_delete_item       : 品目削除
   - mf_download_pdf      : 見積PDFをダウンロードしてファイル保存
   - mf_convert_quote_to_invoice : 見積書を請求書に変換し、下書きとして保存
+  - mf_search_billings    : 請求書の検索（読み取り専用・売上内訳/月次集計用）
+  - mf_get_billing        : 請求書1件取得（品目内訳含む・読み取り専用）
 
-すべて下書きまで。発行はMF管理画面から人間が行う運用。
+すべて下書きまで。発行はMF管理画面から人間が行う運用。請求書系ツールは読み取り専用。
 """
 
 import json
@@ -225,6 +227,69 @@ TOOLS = [
         },
     },
     {
+        "name": "mf_search_billings",
+        "description": (
+            "請求書（発行済み・下書き含む）を検索する。読み取り専用。売上内訳の確認・月次集計用。"
+            "queryで件名・宛先を検索、range_key + from/to で日付範囲絞り込み（例: range_key='billing_date', from='2026-05-01', to='2026-05-31'）。"
+            "デフォルトはcompact=true（金額・宛先・日付・入金状況などの要約のみ返す。トークン節約）。"
+            "品目内訳まで見たい場合は mf_get_billing を使う。"
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "検索キーワード（件名・宛先等）。省略可"},
+                "range_key": {
+                    "type": "string",
+                    "description": "日付絞り込みの対象: billing_date | due_date | sales_date | created_at | updated_at",
+                },
+                "from": {"type": "string", "description": "開始日 yyyy-mm-dd"},
+                "to": {"type": "string", "description": "終了日 yyyy-mm-dd"},
+                "compact": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "trueなら要約（id/番号/件名/宛先/日付/金額/入金状況）のみ返す",
+                },
+                "per_page": {"type": "integer", "default": 25},
+                "page": {"type": "integer", "default": 1},
+            },
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "mf_get_billing",
+        "description": "指定したIDの請求書を1件取得する（品目内訳・入金ステータス含む全フィールド）。読み取り専用。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"billing_id": {"type": "string"}},
+            "required": ["billing_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "mf_update_billing",
+        "description": (
+            "請求書のメタ情報（請求日・売上計上日・支払期限・件名・メモ等）を更新する。"
+            "MF Invoice API v3 の `PUT /billings/{id}` を呼ぶ。payloadはフラットな辞書で、"
+            "更新するフィールドだけ入れる（例: {\"billing_date\": \"2026-08-31\", \"sales_date\": \"2026-08-31\"}）。"
+            "**mf_convert_quote_to_invoice は見積の日付を引き継がず実行日を入れる**ので、"
+            "過去日付の請求書を作るときは変換の直後にこれで直す。"
+            "送信済み・郵送済み・入金済み・ロック済みの請求書は安全ガードでブロックされる。"
+            "品目の編集はできない（金額を変えるなら見積からやり直す）。"
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "billing_id": {"type": "string"},
+                "payload": {
+                    "type": "object",
+                    "description": "更新するフィールドだけ入れる。billing_date / sales_date / due_date / title / memo / note など",
+                },
+            },
+            "required": ["billing_id", "payload"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "mf_convert_quote_to_invoice",
         "description": (
             "指定した見積書(quote_id)をMF Cloud請求書に変換し、下書き状態の請求書として保存する。"
@@ -401,11 +466,54 @@ def _attach_billing_web_url(result: Any) -> Any:
     return result
 
 
+# 請求書の要約で返すキー（compact=true時。トークン節約のため品目・住所等は落とす）
+_BILLING_SUMMARY_KEYS = [
+    "id", "billing_number", "title", "partner_name",
+    "billing_date", "due_date", "sales_date",
+    "subtotal_price", "excise_price", "total_price",
+    "payment_status", "posting_status", "transmit_status",
+    "memo", "tag_names",
+]
+
+
+def _tool_mf_search_billings(args: dict) -> dict:
+    """請求書検索（読み取り専用）。compact=trueで要約のみ返す。"""
+    res = mf_client.list_billings(
+        args.get("query"),
+        per_page=args.get("per_page", 25),
+        page=args.get("page", 1),
+        range_key=args.get("range_key"),
+        date_from=args.get("from"),
+        date_to=args.get("to"),
+    )
+    if not args.get("compact", True):
+        return res
+    items = res.get("data", []) if isinstance(res, dict) else []
+    slim = []
+    for b in items:
+        if not isinstance(b, dict):
+            continue
+        row = {k: b.get(k) for k in _BILLING_SUMMARY_KEYS if b.get(k) not in (None, "", [])}
+        slim.append(row)
+    return {"data": slim, "pagination": res.get("pagination", {})}
+
+
+def _tool_mf_get_billing(args: dict) -> dict:
+    return _attach_billing_web_url(mf_client.get_billing(args["billing_id"]))
+
+
 def _tool_mf_convert_quote_to_invoice(args: dict) -> dict:
     """見積書を請求書に変換し、下書きとして保存する。"""
     quote_id = args["quote_id"]
     billing = mf_client.convert_quote_to_billing(quote_id)
     return _attach_billing_web_url(billing)
+
+
+def _tool_mf_update_billing(args: dict) -> dict:
+    """請求書のメタ情報を更新する（日付の直しが主な用途）。"""
+    return _attach_billing_web_url(
+        mf_client.update_billing(args["billing_id"], args["payload"])
+    )
 
 
 def _tool_mf_download_pdf(args: dict) -> dict:
@@ -447,6 +555,9 @@ TOOL_HANDLERS = {
     "mf_delete_item": _tool_mf_delete_item,
     "mf_download_pdf": _tool_mf_download_pdf,
     "mf_convert_quote_to_invoice": _tool_mf_convert_quote_to_invoice,
+    "mf_search_billings": _tool_mf_search_billings,
+    "mf_get_billing": _tool_mf_get_billing,
+    "mf_update_billing": _tool_mf_update_billing,
 }
 
 
@@ -484,7 +595,7 @@ def _handle_initialize(params: dict) -> dict:
         },
         "serverInfo": {
             "name": "conte-mf-quote",
-            "version": "0.3.0",
+            "version": "0.4.0",
         },
     }
 
